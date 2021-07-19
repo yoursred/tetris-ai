@@ -3,6 +3,7 @@ import numpy as np
 from numpy import pi, cos, sin
 from numpy.random import choice as npchoice
 from neat.nn.feed_forward import FeedForwardNetwork as FFN
+from random import shuffle
 
 from typing import Tuple
 from copy import deepcopy
@@ -67,6 +68,10 @@ def rotate(point, theta, origin=(0,0)):
     return rotated + origin
 
 
+# TODO: document
+# TODO: Fix rotation validity check
+# TODO: Turn off light before going to bed
+
 class Mino:
     def __init__(self, type_: str, pos: Tuple[int, int]=None) -> None:
         if type_ not in 'IJLOSTZ':
@@ -86,6 +91,10 @@ class Mino:
             (ANGLES[self.direction],) * 4,
             (ROTATION_ORIGINS[self.type],) * 4
         )
+        points = map(
+            lambda x: (x+self.pos()).astype(np.int),
+            points
+        )
         return list(points)
 
     def rotate(self) -> None:
@@ -100,10 +109,12 @@ class Mino:
         return Mino(self.type)
 
     def pos(self):
-        return self.x, self.y
+        return np.array((self.x, self.y))
 
     def check_collision(self, board, dirx=0, diry=1):
         for point in self.render():
+            if point[0]+dirx not in range(10) or point[1]+diry not in range(40):
+                return True
             if board[point[0]+dirx, point[1]+diry] != 0:
                 return True
         return False
@@ -112,19 +123,21 @@ class Mino:
         if dir_ == 'left':
             if not self.check_collision(board, -1, 0):
                 self.x += -1
-                return False
-            return True
+                # return False
+            self.move(board, 'down')
+            return False
         elif dir_ == 'right':
             if not self.check_collision(board, 1, 0):
                 self.x += 1
-                return False
-            return True
+            self.move(board, 'down')
+            return False
         elif dir_ == 'rotate':
             test = Mino(self.type, (self.x, self.y))
             test.rotate()
             if not test.check_collision(board, 0, 0):
                 self.rotate()
                 return False
+            self.move(board, 'down')
             return True
         elif dir_ == 'down' or dir_ == 'nop':
             if not self.check_collision(board, 0, 1):
@@ -161,10 +174,9 @@ class Game:
     @staticmethod
     def generate_minos():
         minos = ['I', 'J', 'L', 'O', 'S', 'T', 'Z']
-        minos = npchoice(minos, 7)
+        shuffle(minos)
         for i, mino in enumerate(minos):
-            if mino in ('I', 'O'):
-                minos[i] = Mino(mino)
+            minos[i] = Mino(mino)
         current, *minos = minos
         return current, minos
 
@@ -177,7 +189,7 @@ class Game:
                 self.held = None
         else:
             if (self.held is None) or hold:
-                self.current, self.bag = self.generate_minos
+                self.current, self.bag = self.generate_minos()
             else:
                 self.current = self.held
                 self.held = None
@@ -190,10 +202,13 @@ class Game:
         points = self.current.render()
         self.pop_from_bag()
         for point in points:
-            self.board[point] = 1
+            self.board[tuple(point)] = 1
 
     def render(self):
         buffer = deepcopy(self.board)
+        # try:
         for point in self.current.render():
-            buffer[point] = 2
+            buffer[tuple(point)] = 2
+        # except AttributeError:
+        #     pass
         return buffer[:, 20:]
