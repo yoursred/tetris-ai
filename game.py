@@ -11,30 +11,30 @@ from copy import deepcopy
 
 
 MINOS = {
-    'I':((0,0),(1,0),(2,0),(3,0)),
-    'J':((0,0),(0,1),(1,1),(2,1)),
-    'L':((0,1),(1,1),(2,1),(2,0)),
-    'O':((0,0),(0,1),(1,0),(1,1)),
-    'S':((0,1),(1,1),(1,0),(2,0)),
-    'T':((0,1),(1,1),(1,0),(2,1)),
-    'Z':((0,0),(1,0),(1,1),(2,1))
+    'I':((-2,-1),(-1,-1),(0,-1),(1,-1)),
+    'J':((-1,0),(-1,-1),(0,0),(1,0)),
+    'L':((-1,0),(1,-1),(0,0),(1,0)),
+    'O':((-1,-1),(-1,0),(0,-1),(0,0)) ,# ((-1,1),(-1,0),(0,1),(0,0)),
+    'S':((-1,0),(0,0),(0,-1),(1,-1)), # ((0,1),(1,1),(1,0),(2,0)),
+    'T':((-1,0),(0,0),(0,-1),(1,0)),
+    'Z':((-1,-1), (0,-1),(0,0),(1,0))
 }
 
 ROTATION_ORIGINS = { # What to rotate the tetrominos around
-    'I':(1.5, -0.5),
-    'J':(0.5, -0.5),
-    'L':(0.5, -0.5),
-    'O':(0.5, -0.5),
-    'S':(0.5, -0.5),
-    'T':(1  , -1  ),
-    'Z':(0.5, -0.5)
+    'I':(-.5, -.5),
+    'J':(0, 0),
+    'L':(0, 0),
+    'O':(-.5, -.5),
+    'S':(0, 0),
+    'T':(0, 0),
+    'Z':(0, 0)
 }
 
 ANGLES = {
     'up':0,
-    'right':-pi/2,
-    'down':-pi,
-    'left':-3*pi/2
+    'right':pi/2,
+    'down':pi,
+    'left':3*pi/2
 }
 
 DIRECTIONS = {
@@ -49,13 +49,23 @@ WALL_KICKS = {
 }
 
 SPAWN_POSITIONS = {
-    'I' : (3, 20),
+    'I' : (5, 20),
     'J' : (3, 21),
     'L' : (3, 21),
     'O' : (4, 21),
     'S' : (3, 21),
     'T' : (3, 21),
     'Z' : (3, 21)
+}
+
+INTS = {
+    'I' : 1,
+    'J' : 2,
+    'L' : 3,
+    'O' : 4,
+    'S' : 5,
+    'T' : 6,
+    'Z' : 7
 }
 
 # Rotation matrix
@@ -92,7 +102,8 @@ class Mino:
             (ROTATION_ORIGINS[self.type],) * 4
         )
         points = map(
-            lambda x: (x+self.pos()).astype(np.int),
+            lambda x: np.round(x).astype(int)+self.pos(), # numpy doesn't round when casting to int
+                                                          # https://stackoverflow.com/a/43920513/16338589
             points
         )
         return list(points)
@@ -124,21 +135,22 @@ class Mino:
             if not self.check_collision(board, -1, 0):
                 self.x += -1
                 # return False
-            self.move(board, 'down')
+            # self.move(board, 'down')
             return False
         elif dir_ == 'right':
             if not self.check_collision(board, 1, 0):
                 self.x += 1
-            self.move(board, 'down')
+            # self.move(board, 'down')
             return False
         elif dir_ == 'rotate':
             test = Mino(self.type, (self.x, self.y))
+            test._change_direction(self.direction)
             test.rotate()
             if not test.check_collision(board, 0, 0):
                 self.rotate()
                 return False
             self.move(board, 'down')
-            return True
+            # return True
         elif dir_ == 'down' or dir_ == 'nop':
             if not self.check_collision(board, 0, 1):
                 self.y += 1
@@ -174,6 +186,7 @@ class Game:
     @staticmethod
     def generate_minos():
         minos = ['I', 'J', 'L', 'O', 'S', 'T', 'Z']
+        # minos = ['I']
         shuffle(minos)
         for i, mino in enumerate(minos):
             minos[i] = Mino(mino)
@@ -195,20 +208,43 @@ class Game:
                 self.held = None
 
     def hold(self):
-        self.held = self.current.copy()
-        self.pop_from_bag(hold=True)
+        if self.held is None:
+            self.held = self.current.copy()
+            self.pop_from_bag(hold=True)
 
     def paste_to_board(self):
+        t = self.board.transpose()
         points = self.current.render()
+        color = INTS[self.current.type]
         self.pop_from_bag()
         for point in points:
-            self.board[tuple(point)] = 1
+            self.board[tuple(point)] = color
+        for i in range(40):
+            if 0 not in t[i]:
+                self.board[:, :i + 1] = np.concatenate(
+                    # Explanation of this black magic:
+                    # 1) Take a slice of the array from [(0,0), (10,i)) so
+                    #    from y=0 and stop just before the completed row
+                    #    self.board[:, :i]
+                    # 2) Transpose it, that way it's an array of rows
+                    #    self.board[:, :i].transpose()
+                    # 3) Create an empty row i.e., an array with one row full of zeros
+                    #    np.zeros((1, 10))
+                    # 4) Stick the empty row atop the slice of rows
+                    #    np.concatenate(
+                    #       (np.zeros((1, 10)), self.board[:, :i].transpose())
+                    #    )
+                    # 5) Transpose the resulting array so that it's an array of columns
+                    # 6) Set the board from y=0 to y=i (completed row) to the newly created slice, clearing the
+                    #    completed row and shifting the rows
+                    (np.zeros((1, 10)), self.board[:, :i].transpose())
+                ).transpose()
 
     def render(self):
         buffer = deepcopy(self.board)
         # try:
         for point in self.current.render():
-            buffer[tuple(point)] = 2
+            buffer[tuple(point)] = 8
         # except AttributeError:
-        #     pass
+            # pass
         return buffer[:, 20:]
