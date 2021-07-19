@@ -1,7 +1,8 @@
 # import pygame
 import numpy as np
 from numpy import pi, cos, sin
-from numpy.random import choice as npchoice
+# from numpy.random import choice as npchoice
+from random import choices
 from neat.nn.feed_forward import FeedForwardNetwork as FFN
 from random import shuffle
 
@@ -59,6 +60,7 @@ SPAWN_POSITIONS = {
 }
 
 INTS = {
+    None: 0,
     'I' : 1,
     'J' : 2,
     'L' : 3,
@@ -173,6 +175,8 @@ class Game:
         self.current: Mino = current
         self.bag: list[Mino] = bag
         self.held = None
+        self.score = 0
+        self.gameover = False
 
     def step(self, cmd='nop'):
         if cmd not in ('nop', 'left', 'right', 'rotate', 'hold', 'drop'):
@@ -217,10 +221,14 @@ class Game:
         points = self.current.render()
         color = INTS[self.current.type]
         self.pop_from_bag()
+        cleared = 0
         for point in points:
+            if point[1] < 22:
+                self.gameover = True
             self.board[tuple(point)] = color
         for i in range(40):
             if 0 not in t[i]:
+                cleared += 1
                 self.board[:, :i + 1] = np.concatenate(
                     # Explanation of this black magic:
                     # 1) Take a slice of the array from [(0,0), (10,i)) so
@@ -239,6 +247,8 @@ class Game:
                     #    completed row and shifting the rows
                     (np.zeros((1, 10)), self.board[:, :i].transpose())
                 ).transpose()
+        cleared = 4 if cleared > 4 else cleared
+        self.score += [0, 40, 100, 300, 1200][cleared]
 
     def render(self):
         buffer = deepcopy(self.board)
@@ -248,3 +258,23 @@ class Game:
         # except AttributeError:
             # pass
         return buffer[:, 20:]
+
+    def observations(self):
+        board = self.render()
+        board[board in range(1, 8)] = 1
+        board[board == 8] = 2
+        board /= 2
+
+        held = INTS[self.held.type] / 8
+        current = INTS[self.current.type] / 8
+
+        return np.array([current, held, *board.flatten()])
+
+    def _stepfromactivation(self, activation):
+        choice = choices(
+            ['left', 'right', 'rotate', 'drop', 'down', 'hold'],
+            activation,
+            k=1
+        )[0]
+        self.step(choice)
+
