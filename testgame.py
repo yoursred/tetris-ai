@@ -49,13 +49,14 @@ controls = {
     pygame.K_h:'hold'
     }
 
-gameover = False
+# gameover = False
 
 debug = False
 rotatedebug = False
+paused = False
 
 # exit()
-while not gameover:
+while not game.gameover:
     cmd = 'nop'
 
     buffer = game.render()
@@ -71,6 +72,8 @@ while not gameover:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
             print('ROTATO')
             rotatedebug = not rotatedebug
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+            paused = not paused
         print(event)
     paint(game.render())
     # display.fill((0, 0, 0))
@@ -90,6 +93,7 @@ while not gameover:
         # pass
     if rotatedebug:
         cmd='rotate'
-    game.step(cmd=cmd)
+    if not paused:
+        game.step(cmd=cmd)
     pygame.display.update()
     clock.tick(5)
