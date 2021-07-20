@@ -179,6 +179,7 @@ class Game:
         self.held = None
         self.score = 0
         self.gameover = False
+        self.tickdelay = 1
         # self.gametimer.start()
 
     def step(self, cmd='nop'):
@@ -268,7 +269,7 @@ class Game:
     def timetick(self):
         if not self.gameover:
             self.step('down')
-            threading.Timer(1.0, self.timetick).start()
+            threading.Timer(self.tickdelay, self.timetick).start()
 
     def observations(self):
         board = self.render()
@@ -290,6 +291,8 @@ class Game:
 
     def neatplay(self):
         # self.gametimer.start()
+        self.tickdelay = 0.1
+        self.timetick()
         while not self.gameover:
             self.neatstep()
         return self.fitness
@@ -304,7 +307,7 @@ class Game:
             weights=activation,
             k=1
         )[0]
-        print(f'{np.round(activation, 3)} -> {choice}')
+        # print(f'{np.round(activation, 3)} -> {choice}')
         self.step(choice)
 
     @property
