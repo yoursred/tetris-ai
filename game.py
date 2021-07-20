@@ -1,11 +1,11 @@
 # import pygame
 import numpy as np
-from numpy import pi, cos, sin
+from numpy import pi, cos, sin, log as ln
 # from numpy.random import choice as npchoice
 from random import choices
 from neat.nn.feed_forward import FeedForwardNetwork as FFN
 from random import shuffle
-
+import threading
 from typing import Tuple
 from copy import deepcopy
 
@@ -151,9 +151,9 @@ class Mino:
             if not test.check_collision(board, 0, 0):
                 self.rotate()
                 return False
-            self.move(board, 'down')
+            # self.move(board, 'down')
             # return True
-        elif dir_ == 'down' or dir_ == 'nop':
+        elif dir_ == 'down': # or dir_ == 'nop':
             if not self.check_collision(board, 0, 1):
                 self.y += 1
                 return False
@@ -162,6 +162,8 @@ class Mino:
             while not self.check_collision(board, 0, 1):
                 self.y += 1
             return True
+        if dir_ == 'nop':
+            pass
 
 
 class Game:
@@ -177,15 +179,17 @@ class Game:
         self.held = None
         self.score = 0
         self.gameover = False
+        # self.gametimer.start()
 
     def step(self, cmd='nop'):
-        if cmd not in ('nop', 'left', 'right', 'rotate', 'hold', 'drop'):
+        if cmd not in ('nop', 'left', 'right', 'rotate', 'hold', 'drop', 'down'):
             raise ValueError(f'invalid command: {repr(cmd)}')
         if cmd != 'hold':
             if self.current.move(self.board, cmd):
                 self.paste_to_board()
         elif cmd == 'hold':
             self.hold()
+
 
     @staticmethod
     def generate_minos():
@@ -215,6 +219,8 @@ class Game:
         if self.held is None:
             self.held = self.current.copy()
             self.pop_from_bag(hold=True)
+        else:
+            self.step('nop')
 
     def paste_to_board(self):
         t = self.board.transpose()
@@ -259,22 +265,48 @@ class Game:
             # pass
         return buffer[:, 20:]
 
+    def timetick(self):
+        if not self.gameover:
+            self.step('down')
+            threading.Timer(1.0, self.timetick).start()
+
     def observations(self):
         board = self.render()
-        board[board in range(1, 8)] = 1
+        board[np.logical_and(board > 0, board < 8)] = 1
         board[board == 8] = 2
         board /= 2
 
-        held = INTS[self.held.type] / 8
+        held = INTS[self.held if self.held is None else self.held.type] / 8
         current = INTS[self.current.type] / 8
 
         return np.array([current, held, *board.flatten()])
 
+    def neatstep(self):
+        self._stepfromactivation(
+            self.network.activate(
+                self.observations()
+            )
+        )
+
+    def neatplay(self):
+        # self.gametimer.start()
+        while not self.gameover:
+            self.neatstep()
+        return self.fitness
+
     def _stepfromactivation(self, activation):
+        activation = [x if x > 0 else 0 for x in activation]
+        if sum(activation) == 0:
+            activation = [1] * 6
+        # print(activation)
         choice = choices(
-            ['left', 'right', 'rotate', 'drop', 'down', 'hold'],
-            activation,
+            population = ['left', 'right', 'rotate', 'drop', 'nop', 'hold'],
+            weights=activation,
             k=1
         )[0]
+        print(f'{np.round(activation, 3)} -> {choice}')
         self.step(choice)
 
+    @property
+    def fitness(self):
+        return ln(self.score + 1)

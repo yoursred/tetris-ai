@@ -55,6 +55,7 @@ debug = False
 rotatedebug = False
 paused = False
 
+game.timetick()
 # exit()
 while not game.gameover:
     cmd = 'nop'
@@ -62,7 +63,7 @@ while not game.gameover:
     buffer = game.render()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            gameover = True
+            game.gameover = True
         if event.type == pygame.KEYDOWN and event.key in controls:
             cmd = controls[event.key]
             # game.step(cmd)
@@ -74,26 +75,13 @@ while not game.gameover:
             rotatedebug = not rotatedebug
         if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
             paused = not paused
-        print(event)
+        # print(event)
     paint(game.render())
-    # display.fill((0, 0, 0))
-    # for x in range(10):
-    #     for y in range(20):
-    #         if buffer[x, y] == 0:
-    #             pass
-    #         elif buffer[x, y] == 1:
-    #             pygame.draw.rect(display, locked, pygame.Rect(x * 40, y * 40, 40, 40))
-    #             pygame.draw.rect(display, white, pygame.Rect(x * 40, y * 40, 40, 40), 2)
-    #         elif buffer[x, y] == 2:
-    #             pygame.draw.rect(display, moving[game.current.type], pygame.Rect(x * 40, y * 40, 40, 40))
-    #             pygame.draw.rect(display, white, pygame.Rect(x * 40, y * 40, 40, 40), 2)
-    # cmd = 'nop'
     if debug:
         print('Thee')
         # pass
     if rotatedebug:
         cmd='rotate'
-    if not paused:
-        game.step(cmd=cmd)
+    game.step(cmd=cmd)
     pygame.display.update()
-    clock.tick(5)
+    # clock.tick(5)
