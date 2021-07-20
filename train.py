@@ -52,8 +52,8 @@ def run(config_file, generations=300):
     p.add_reporter(stats)
 
     # Run for up to 300 generations.
-    # pe = neat.ParallelEvaluator(multiprocessing.cpu_count(), eval_genome)
-    winner = p.run(eval_genomes, generations)
+    pe = neat.ParallelEvaluator(multiprocessing.cpu_count(), eval_genome)
+    winner = p.run(pe.evaluate, generations)
 
     # Display the winning genome.
     print('\nBest genome:\n{!s}'.format(winner))
