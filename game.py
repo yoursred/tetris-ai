@@ -1,24 +1,30 @@
 # import pygame
+import pickle
+# import time
+from pprint import pprint
+
 import numpy as np
 from numpy import pi, cos, sin, log as ln
-# from numpy.random import choice as npchoice
 from random import choices
 from neat.nn.feed_forward import FeedForwardNetwork as FFN
 from random import shuffle
 import threading
-from typing import Tuple
+from typing import Tuple, List
 from copy import deepcopy
+import pygame
+import inspect
+from uuid import uuid4
 
 
 
 MINOS = {
-    'I':((-2,-1),(-1,-1),(0,-1),(1,-1)),
-    'J':((-1,0),(-1,-1),(0,0),(1,0)),
-    'L':((-1,0),(1,-1),(0,0),(1,0)),
-    'O':((-1,-1),(-1,0),(0,-1),(0,0)) ,# ((-1,1),(-1,0),(0,1),(0,0)),
-    'S':((-1,0),(0,0),(0,-1),(1,-1)), # ((0,1),(1,1),(1,0),(2,0)),
-    'T':((-1,0),(0,0),(0,-1),(1,0)),
-    'Z':((-1,-1), (0,-1),(0,0),(1,0))
+    'I': ((-2, -1), (-1, -1), ( 0, -1), ( 1, -1)),
+    'J': ((-1,  0), (-1, -1), ( 0,  0), ( 1,  0)),
+    'L': ((-1,  0), ( 1, -1), ( 0,  0), ( 1,  0)),
+    'O': ((-1, -1), (-1,  0), ( 0, -1), ( 0,  0)),
+    'S': ((-1,  0), ( 0,  0), ( 0, -1), ( 1, -1)),
+    'T': ((-1,  0), ( 0,  0), ( 0, -1), ( 1,  0)),
+    'Z': ((-1, -1), ( 0, -1), ( 0,  0), ( 1,  0))
 }
 
 ROTATION_ORIGINS = { # What to rotate the tetrominos around
@@ -51,12 +57,12 @@ WALL_KICKS = {
 
 SPAWN_POSITIONS = {
     'I' : (5, 20),
-    'J' : (3, 21),
-    'L' : (3, 21),
-    'O' : (4, 21),
-    'S' : (3, 21),
-    'T' : (3, 21),
-    'Z' : (3, 21)
+    'J' : (4, 21),
+    'L' : (4, 21),
+    'O' : (5, 21),
+    'S' : (4, 21),
+    'T' : (4, 21),
+    'Z' : (4, 21)
 }
 
 INTS = {
@@ -70,6 +76,8 @@ INTS = {
     'Z' : 7
 }
 
+TOINTS = {v: k for k, v in INTS.items()}
+
 # Rotation matrix
 R = lambda theta: np.array([[cos(theta), -1*sin(theta)],[sin(theta), cos(theta)]])
 
@@ -81,8 +89,6 @@ def rotate(point, theta, origin=(0,0)):
 
 
 # TODO: document
-# TODO: Fix rotation validity check
-# TODO: Turn off light before going to bed
 
 class Mino:
     def __init__(self, type_: str, pos: Tuple[int, int]=None) -> None:
@@ -94,8 +100,9 @@ class Mino:
         self.x: int = pos[0]
         self.y: int = pos[1]
         self.direction = 'up'
+        self.id_log = set()
 
-    def render(self) -> list[tuple]:
+    def render(self):
         points = map(np.array, MINOS[self.type])
         points = map(
             rotate,
@@ -111,6 +118,7 @@ class Mino:
         return list(points)
 
     def rotate(self) -> None:
+        self._log_id()
         self._change_direction(DIRECTIONS[self.direction])
 
     def _change_direction(self, direction: str) -> None:
@@ -126,13 +134,14 @@ class Mino:
 
     def check_collision(self, board, dirx=0, diry=1):
         for point in self.render():
-            if point[0]+dirx not in range(10) or point[1]+diry not in range(40):
+            if (point[0]+dirx not in range(10)) or (point[1]+diry not in range(40)):
                 return True
             if board[point[0]+dirx, point[1]+diry] != 0:
                 return True
         return False
 
     def move(self, board, dir_):
+        self._log_id()
         if dir_ == 'left':
             if not self.check_collision(board, -1, 0):
                 self.x += -1
@@ -161,13 +170,30 @@ class Mino:
         if dir_ == 'drop':
             while not self.check_collision(board, 0, 1):
                 self.y += 1
-            return True
+            return False
         if dir_ == 'nop':
             pass
 
+    def _log_id(self):
+        stack = inspect.stack()
+        # with open('stack', 'w') as f:
+            # pprint(stack[2][0].f_locals, stream=f)
+            # raise BaseException('HECK')
+        caller_object = stack[2][0].f_locals['self']
+        if isinstance(caller_object, Game):
+            # print('WOKE')
+            self.id_log.add(caller_object.uuid)
+        # else:
+            # print('NOPE')
+
 
 class Game:
-    def __init__(self, board: np.array=None, network: FFN=None):
+    def __init__(self, board: np.array=None, network: FFN=None, render=False):
+
+        self.uuid = str(uuid4())
+
+        self.unbag = []
+
         if board is None:
             self.board = np.zeros((10, 40))
         else:
@@ -175,27 +201,121 @@ class Game:
         self.network = network
         current, bag = self.generate_minos()
         self.current: Mino = current
-        self.bag: list[Mino] = bag
+        self.bag: List[Mino] = bag
         self.held = None
         self.score = 0
+        self.penalties = 0
         self.gameover = False
-        self.tickdelay = 1
-        # self.gametimer.start()
+        self.actions = []
+        self.placed_pieces = 0
 
-    def step(self, cmd='nop'):
+        self.ticking = False
+        self.tickdelay = 1
+        self.timer = threading.Timer(self.tickdelay, self.timetick)
+
+
+        self.render = render
+        if render:
+            pygame.init()
+            self.display = pygame.display.set_mode((1000, 800))
+            pygame.display.set_caption('Tetris')
+            self.font = pygame.font.SysFont('Ubuntu Mono', size=40)
+        self._moving = {
+            'I': (0, 255, 255),
+            'J': (0, 0, 255),
+            'L': (255, 165, 0),
+            'O': (255, 255, 0),
+            'S': (0, 255, 0),
+            'T': (128, 0, 128),
+            'Z': (255, 0, 0)
+        }
+        self.possible_actions = ['left:  ', 'right: ', 'rotate:', 'drop:  ', 'nop:   ', 'hold:  ']
+
+
+    def paint(self, choice, activation=None):
+        if activation is None:
+            activation = []
+        buffer = self.render_board()
+        self.display.fill((200, 200, 200))
+        test = self.font.render(f'chosen: {choice}', True, (80, 39, 39))
+        for i, val in enumerate(activation):
+            # print(activation)
+            text = self.font.render(f'{self.possible_actions[i]} {round(val, 7)}', True, (80, 39, 39))
+            self.display.blit(text, (16, i*40))
+        self.display.blit(test, (16, 7*40))
+
+        score = self.font.render(f'score:       {self.score}', True, (80, 39, 39))
+        self.display.blit(score, (16, 9*40))
+
+        penalties = self.font.render(f'penalties:   {self.penalties}', True, (80, 39, 39))
+        self.display.blit(penalties, (16, 10 * 40))
+
+        fitness = self.font.render(f'fitness:    {" " if self.fitness>=0 else ""}{self.fitness}', True, (80, 39, 39))
+        self.display.blit(fitness, (16, 11 * 40))
+
+        held = self.font.render('   HELD', True, (80, 39, 39))
+        self.display.blit(held, (800, 0))
+        bag = self.font.render('    BAG', True, (80, 39, 39))
+        self.display.blit(bag, (800, 160))
+        if self.held is not None:
+            piece = self.held.copy()
+            piece.x = 1
+            piece.y = 3
+
+            for x, y in piece.render():
+                sx = ((x+2) * 30) + 800
+                sy = (y * 30)
+                pygame.draw.rect(self.display, self._moving[piece.type], pygame.Rect(sx, sy, 30, 30))
+                pygame.draw.rect(self.display, (0, 0, 0), pygame.Rect(sx, sy, 30, 30), 2)
+
+        for i, piece in enumerate(self.bag[::-1]):
+            piece = piece.copy()
+            piece.x = 1
+            piece.y = i*3 + 10
+            for x, y in piece.render():
+                sx = ((x+2) * 30) + 800
+                sy = (y * 30)
+                pygame.draw.rect(self.display, self._moving[piece.type], pygame.Rect(sx, sy, 30, 30))
+                pygame.draw.rect(self.display, (0, 0, 0), pygame.Rect(sx, sy, 30, 30), 2)
+
+        for x in range(10):
+            for y in range(20):
+                sx = (x*40) + 400
+                sy = (y*40)
+                pygame.draw.rect(self.display, (0, 28, 70), pygame.Rect(sx, sy, 40, 40))
+                pygame.draw.rect(self.display, (0, 35, 80), pygame.Rect(sx, sy, 40, 40), 2)
+        for x in range(10):
+            for y in range(20):
+                sx = (x*40) + 400
+                sy = (y*40)
+                if buffer[x, y] == 0:
+                    pass
+                elif buffer[x, y] in range(1, 8):
+                    pygame.draw.rect(self.display, self._moving[TOINTS[buffer[x, y]]], pygame.Rect(sx, sy, 40, 40))
+                    pygame.draw.rect(self.display, (0, 0, 0), pygame.Rect(sx, sy, 40, 40), 2)
+                elif buffer[x, y] == 8:
+                    pygame.draw.rect(self.display, self._moving[self.current.type], pygame.Rect(sx, sy, 40, 40))
+                    pygame.draw.rect(self.display, (0, 0, 0), pygame.Rect(sx, sy, 40, 40), 2)
+        pygame.display.update()
+
+    def game_step(self, cmd='nop'):
         if cmd not in ('nop', 'left', 'right', 'rotate', 'hold', 'drop', 'down'):
             raise ValueError(f'invalid command: {repr(cmd)}')
+        self._penalize(cmd)
         if cmd != 'hold':
             if self.current.move(self.board, cmd):
+                self.actions.append(cmd)
                 self.paste_to_board()
+                # self.actions.append(cmd)
         elif cmd == 'hold':
             self.hold()
+            self.actions.append(cmd)
 
 
     @staticmethod
     def generate_minos():
         minos = ['I', 'J', 'L', 'O', 'S', 'T', 'Z']
-        # minos = ['I']
+        # minos = ['O']
         shuffle(minos)
         for i, mino in enumerate(minos):
             minos[i] = Mino(mino)
@@ -221,12 +341,13 @@ class Game:
             self.held = self.current.copy()
             self.pop_from_bag(hold=True)
         else:
-            self.step('nop')
+            self.game_step('nop')
 
     def paste_to_board(self):
         t = self.board.transpose()
         points = self.current.render()
         color = INTS[self.current.type]
+        self.unbag.append(self.current)
         self.pop_from_bag()
         cleared = 0
         for point in points:
@@ -256,48 +377,67 @@ class Game:
                 ).transpose()
         cleared = 4 if cleared > 4 else cleared
         self.score += [0, 40, 100, 300, 1200][cleared]
+        self.placed_pieces += 1
 
-    def render(self):
+    def render_board(self):
         buffer = deepcopy(self.board)
         # try:
         for point in self.current.render():
             buffer[tuple(point)] = 8
-        # except AttributeError:
-            # pass
+        # except IndexError:
+        #     with open('crashdump', 'wb') as f:
+        #         pickle.dump(self, f)
+        #         exit(1)
         return buffer[:, 20:]
 
     def timetick(self):
+        self.ticking = True
         if not self.gameover:
-            self.step('down')
-            threading.Timer(self.tickdelay, self.timetick).start()
+            self.game_step('down')
+            self.timer = threading.Timer(self.tickdelay, self.timetick)
+            self.timer.start()
 
     def observations(self):
-        board = self.render()
+        board = self.render_board()
         board[np.logical_and(board > 0, board < 8)] = 1
         board[board == 8] = 2
         board /= 2
 
-        held = INTS[self.held if self.held is None else self.held.type] / 8
-        current = INTS[self.current.type] / 8
+        held = INTS[self.held if self.held is None else self.held.type] / 7
+        current = INTS[self.current.type] / 7
 
-        return np.array([current, held, *board.flatten()])
+        header = np.array([held,
+                           current,
+                           *[INTS[x.type]/8 for x in self.bag[::-1]], *(0,)*(8-len(self.bag))]
+                          ).reshape((1, 10))
+
+        return np.concatenate(
+            (header,
+             board.transpose())
+        ).transpose()
 
     def neatstep(self):
-        self._stepfromactivation(
-            self.network.activate(
-                self.observations()
+        activation = self.network.activate(
+                self.observations().flatten()
             )
-        )
+        choice = self._stepfromactivation(activation)
+        if self.render:
+            self.paint(choice, activation)
+
 
     def neatplay(self):
         # self.gametimer.start()
+        # self.starttime = time.time()
         self.tickdelay = 0.1
         self.timetick()
         while not self.gameover:
             self.neatstep()
+        # self.endtime = time.time()
         return self.fitness
 
     def _stepfromactivation(self, activation):
+        if not self.ticking:
+            self.timetick()
         activation = [x if x > 0 else 0 for x in activation]
         if sum(activation) == 0:
             activation = [1] * 6
@@ -308,8 +448,52 @@ class Game:
             k=1
         )[0]
         # print(f'{np.round(activation, 3)} -> {choice}')
-        self.step(choice)
+        self.game_step(choice)
+        return choice
+
+    def _stepfromaction(self, action):
+        if not self.ticking:
+            self.timetick()
+        choice = ['left', 'right', 'rotate', 'drop', 'nop', 'hold'][action]
+        self.game_step(choice)
+
+    def _penalize(self, action):
+        if action == 'rotate' and self.current.type == 'O':
+            self.penalties += 5
+        if action == 'left' and min(self.current.render(), key= lambda x: x[0])[0] == 0:
+            self.penalties += 5
+        if action == 'right' and max(self.current.render(), key= lambda x: x[0])[0] == 9:
+            self.penalties += 5
+        if action == 'nop' and self.actions[-5:].count('nop') >= 3:
+            self.penalties += 5
+        if action == 'rotate' and self.actions[-5:].count('rotate') > 3:
+            self.penalties += 5
+        if action == 'hold' and self.held is not None:
+            self.penalties += 5
+        if self.bag:
+            if action == 'hold' and self.current.type == self.bag[-1].type:
+                self.penalties += 5
+        if action in ('right', 'left') and self.actions[-8:].count('left') >= 3 and self.actions[-8:].count('right') >= 3:
+            self.penalties += 10
+        return action
+
+    @property
+    def shape_fitness(self):
+        best = max(map(np.sum, self.observations().transpose()[1:]))
+        return best
 
     @property
     def fitness(self):
-        return ln(self.score + 1)
+        # if self.score == 0:
+            # self.score = (self.endtime - self.starttime) ** (1/2)
+        score = np.sqrt(self.score + 1)
+        # return score - np.sqrt(self.penalties)
+
+        return score + self.shape_fitness - ln(np.sqrt(self.penalties) + 1) - 500/(ln(self.placed_pieces + 1)+1)
+
+        # if self.penalties < 150 and score == 0:
+        #     return -999999
+        # elif score == 0:
+        #     return self.shape_fitness/5 - ln(np.sqrt(self.penalties))
+        # else:
+        #     return score - np.sqrt(self.penalties)

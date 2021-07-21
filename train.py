@@ -3,13 +3,9 @@ import os
 import pickle
 
 from game import Game
-# import visualize
 
 import neat
 
-# 2-input XOR inputs and expected outputs.
-xor_inputs = [(0.0, 0.0), (0.0, 1.0), (1.0, 0.0), (1.0, 1.0)]
-xor_outputs = [   (0.0,),     (1.0,),     (1.0,),     (0.0,)]
 
 
 def eval_genome(genome, config):
@@ -27,12 +23,28 @@ def eval_genome(genome, config):
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     game = Game(network=net)
 
-    return game.neatplay()
+    try:
+        fitness = game.neatplay()
+    except IndexError as e:
+        with open('crashdump.board', 'wb') as f:
+            pickle.dump(game.board, f)
+        with open('crashdump.actions', 'wb') as f:
+            pickle.dump(game.actions, f)
+        with open('crashdump.unbag', 'wb') as f:
+            pickle.dump(game.unbag, f)
+        with open('crashdump.current', 'wb') as f:
+            pickle.dump(game.current, f)
+        with open('crashdump.held', 'wb') as f:
+            pickle.dump(game.held, f)
+        print('EHFUCKYOU')
+        raise BaseException('EHFUCKYOU')
+
+    return fitness
 
 def eval_genomes(genomes, config):
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
-        game = Game(network=net)
+        game = Game(network=net, render=True)
 
         genome.fitness = game.neatplay()
 
@@ -52,8 +64,9 @@ def run(config_file, generations=300):
     p.add_reporter(stats)
 
     # Run for up to 300 generations.
-    pe = neat.ParallelEvaluator(multiprocessing.cpu_count(), eval_genome)
+    pe = neat.ParallelEvaluator(multiprocessing.cpu_count()*12, eval_genome)
     winner = p.run(pe.evaluate, generations)
+    # winner = p.run(eval_genomes, generations)
 
     # Display the winning genome.
     print('\nBest genome:\n{!s}'.format(winner))
@@ -68,15 +81,6 @@ def run(config_file, generations=300):
 
     with open(f'model_{generations}', 'wb') as f:
         pickle.dump(winner, f)
-
-    # for xi, xo in zip(xor_inputs, xor_outputs):
-    #     output = winner_net.activate(xi)
-    #     print("input {!r}, expected output {!r}, got {!r}".format(xi, xo, output))
-
-    # node_names = {-1:'A', -2: 'B', 0:'A XOR B'}
-    # visualize.draw_net(config, winner, True, node_names = node_names)
-    # visualize.plot_stats(stats, ylog=False, view=True)
-    # visualize.plot_species(stats, view=True)
 
 
 if __name__ == '__main__':
