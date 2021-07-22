@@ -1,45 +1,7 @@
-from game import Game, INTS
+from game import Game
 import pygame
 
-
-
-# pygame.init()
-
-# display = pygame.display.set_mode((400, 800))
-# pygame.display.set_caption('Tetris')
-
-# clock = pygame.time.Clock()
-
 game = Game(render=True)
-
-# locked = (128, 128, 128)
-# moving = {
-#     'I':(0,255,255),
-#     'J':(0,0,255),
-#     'L':(255, 165, 0),
-#     'O':(255,255,0),
-#     'S':(0,255,0),
-#     'T':(128,0,128),
-#     'Z':(255,0,0)
-# }
-
-# TOINTS = {v: k for k, v in INTS.items()}
-
-# white = (255, 255, 255)
-
-# def paint(buffer_):
-#     display.fill((0, 0, 0))
-#     for x in range(10):
-#         for y in range(20):
-#             if buffer_[x, y] == 0:
-#                 pass
-#             elif buffer[x, y] in range(1,8):
-#                 pygame.draw.rect(display, moving[TOINTS[buffer_[x, y]]], pygame.Rect(x * 40, y * 40, 40, 40))
-#                 pygame.draw.rect(display, white, pygame.Rect(x * 40, y * 40, 40, 40), 2)
-#             elif buffer[x, y] == 8:
-#                 pygame.draw.rect(display, moving[game.current.type], pygame.Rect(x * 40, y * 40, 40, 40))
-#                 pygame.draw.rect(display, white, pygame.Rect(x * 40, y * 40, 40, 40), 2)
-#     pygame.display.update()
 
 controls = {
     pygame.K_LEFT:'left',
@@ -49,20 +11,12 @@ controls = {
     pygame.K_h:'hold'
     }
 
-# gameover = False
-
-# debug = False
-# rotatedebug = False
 paused = False
-
+game.tickdelay = 1
 game.timetick()
 
 hold = False
 
-# pygame.mixer.music.load("korobeiniki.mid")
-# pygame.mixer.music.play()
-
-# exit()
 while not game.gameover:
     cmd = 'nop'
 
@@ -72,16 +26,11 @@ while not game.gameover:
             game.gameover = True
         if event.type == pygame.KEYDOWN and event.key in controls:
             cmd = controls[event.key]
-            # game.step(cmd)
-        # if event.type == pygame.KEYDOWN and event.key == pygame.K_b:
-        #     print('Hello darkness my old friend')
-        #     debug = True
         if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
             print('HOLD')
             hold = not hold
         if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
             paused = not paused
-        # print(event)
 
     if paused:
         game.timer.cancel()
@@ -94,6 +43,5 @@ while not game.gameover:
     game.game_step(cmd=cmd)
     game.paint(cmd)
     pygame.display.update()
-    # clock.tick(5)
 
 print(game.score)

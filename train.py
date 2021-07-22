@@ -2,6 +2,8 @@ import multiprocessing
 import os
 import pickle
 
+import numpy as np
+
 from game import Game
 
 import neat
@@ -21,25 +23,16 @@ def eval_genome(genome, config):
     """
 
     net = neat.nn.FeedForwardNetwork.create(genome, config)
-    game = Game(network=net)
 
-    try:
-        fitness = game.neatplay()
-    except IndexError as e:
-        with open('crashdump.board', 'wb') as f:
-            pickle.dump(game.board, f)
-        with open('crashdump.actions', 'wb') as f:
-            pickle.dump(game.actions, f)
-        with open('crashdump.unbag', 'wb') as f:
-            pickle.dump(game.unbag, f)
-        with open('crashdump.current', 'wb') as f:
-            pickle.dump(game.current, f)
-        with open('crashdump.held', 'wb') as f:
-            pickle.dump(game.held, f)
-        print('EHFUCKYOU')
-        raise BaseException('EHFUCKYOU')
+    fitnesses = []
 
-    return fitness
+    for i in range(5):
+        game = Game(network=net)
+        fitnesses.append(game.neatplay())
+
+    # print(np.mean(fitnesses))
+
+    return np.mean(fitnesses)
 
 def eval_genomes(genomes, config):
     for genome_id, genome in genomes:
@@ -64,7 +57,7 @@ def run(config_file, generations=300):
     p.add_reporter(stats)
 
     # Run for up to 300 generations.
-    pe = neat.ParallelEvaluator(multiprocessing.cpu_count()*12, eval_genome)
+    pe = neat.ParallelEvaluator(multiprocessing.cpu_count()*16, eval_genome)
     winner = p.run(pe.evaluate, generations)
     # winner = p.run(eval_genomes, generations)
 
