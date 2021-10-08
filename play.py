@@ -1,11 +1,12 @@
 # import multiprocessing
+import cProfile
 import os
 import pickle
 
 from game import Game
 
 import neat
-
+# import neatpp.neat as neat
 
 
 def play(config_file):
@@ -16,7 +17,9 @@ def play(config_file):
         winner = pickle.load(f)
     winner_net = neat.nn.FeedForwardNetwork.create(winner, config)
     game = Game(network=winner_net, render=True)
-    score = game.neatplay(1)
+    score = game.neatplay(0.6)
+    # cProfile.run('game.neatplay(1)')
+    print('Fitness:', score)
 
 
 if __name__ == '__main__':
@@ -26,6 +29,6 @@ if __name__ == '__main__':
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, 'config-feedforward')
     # try:
-    play(config_path)
+    cProfile.run('play(config_path)', sort='tottime')
     # except ValueError:
         # pass
