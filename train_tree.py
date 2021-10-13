@@ -2,15 +2,10 @@ import multiprocessing
 import os
 import pickle
 
-# import numpy as np
 import numpy as np
-
-from game import Game
-
 import neat
-# import _neatpp.neat as neat
-import cProfile
 
+from game_tree import GameTree as Game
 
 
 def eval_genome(genome, config):
@@ -28,25 +23,19 @@ def eval_genome(genome, config):
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     fitnesses = []
-
-    for i in range(10):
+    for i in range(3):
         game = Game(network=net, render=False)
-        fitnesses.append(game.neatplay(0.05, 30))
+        fitnesses.append(game.tree_play(0.01, 10))
 
-    return np.min(fitnesses)
+    return np.mean(fitnesses)
 
 
 def eval_genomes(genomes, config):
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
 
-        fitnesses = []
-
-        for i in range(10):
-            game = Game(network=net, render=True)
-            fitnesses.append(game.neatplay(0.05, 30))
-
-        genome.fitness = np.min(fitnesses)
+        game = Game(network=net, render=True)
+        genome.fitness = game.tree_play(0.01, 10)
 
 
 def run(config_file, generations):
@@ -63,25 +52,15 @@ def run(config_file, generations):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    # Run for up to 300 generations.
-    # pe = neat.ParallelEvaluator(multiprocessing.cpu_count()*8, eval_genome)
-    te = neat.ThreadedEvaluator(16*8, eval_genome)
-    winner = p.run(te.evaluate, generations)
-    # winner = p.run(pe.evaluate, generations)
+    # Run
+    pe = neat.ParallelEvaluator(multiprocessing.cpu_count(), eval_genome)
+    # te = neat.ThreadedEvaluator(12, eval_genome)
+    # winner = p.run(te.evaluate, generations)
+    winner = p.run(pe.evaluate, generations)
     # winner = p.run(eval_genomes, generations)
 
-    # Show output of the most fit genome against training data.
-    print('\nOutput:')
-    winner_net = neat.nn.FeedForwardNetwork.create(winner, config)
-    game = Game(network=winner_net)
-    score = game.neatplay()
-
-    print(f'Best genome\'s fitness: {score}')
-
-    with open(f'model_{generations}', 'wb') as f:
+    with open(f'models/safe_{generations}', 'wb') as f:
         pickle.dump(winner, f)
-    with open(f'pop_{generations}', 'wb') as f:
-        pickle.dump(p, f)
 
 
 if __name__ == '__main__':
@@ -89,9 +68,5 @@ if __name__ == '__main__':
     # here so that the script will run successfully regardless of the
     # current working directory.
     local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, 'config-feedforward')
-    # try:
-    run(config_path, 100)
-    # cProfile.run('run(config_path, 10)', sort='tottime')
-    # except ValueError:
-        # pass
+    config_path = os.path.join(local_dir, 'neat-configs/feedforward-tree')
+    run(config_path, 50)
