@@ -2,6 +2,8 @@ from functools import lru_cache
 from copy import deepcopy
 import time
 
+import numpy as np
+
 from game import Game
 from constants import *
 

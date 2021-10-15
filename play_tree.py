@@ -15,7 +15,7 @@ def play(config_file):
     winner_net = neat.nn.FeedForwardNetwork.create(winner, config)
 
     game = Game(network=winner_net, render=True)
-    score = game.tree_play(tickdelay=0.05, timeout=-1, movedelay=0.5)
+    score = game.tree_play(tickdelay=0.05, timeout=-1, movedelay=0.05)
     print('Fitness:', score)
 
 

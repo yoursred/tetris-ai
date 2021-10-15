@@ -6,6 +6,7 @@ from copy import deepcopy
 from neat.nn.feed_forward import FeedForwardNetwork as FFN
 from neat.nn.recurrent import RecurrentNetwork as RN
 import pygame
+import numpy as np
 
 from constants import *
 from utils import rotate
@@ -15,7 +16,7 @@ class Mino:
     """
     Tetromino piece class.
 
-    :param type_: Type of Tetromino, can be any of: IJLOSTZ
+    :param type_: Type of-   Tetromino, can be any of: IJLOSTZ
     :type type_: str
     :param pos: Location of Tetromino, will use a default value if None, defaults to None
     :type pos: Tuple[int, int], optional
@@ -200,7 +201,6 @@ class Game(object):
         Gravity is only used by the `Game.timetick` method, it checks if an action is in the middle of execution and
         waits for it to finish, as `Game.timetick` is asynchronous.
         :param cmd: The action to execute, any of ('nop', 'left', 'right', 'rotate', 'hold', 'drop', 'down', 'gravity')
-        :type cmd: str
         :return: None
         """
         if cmd not in ('nop', 'left', 'right', 'rotate', 'hold', 'drop', 'down', 'gravity'):
