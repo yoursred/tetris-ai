@@ -62,62 +62,30 @@ class GameTree(Game):
                         'drop'))
         return moves
 
-    def tree(self, d=0, c=None) -> dict:
+    def pick_safest_move(self):
         """
         Evaluate all current legal (not useless) movesets, and returns the one with the absolute highest reward. This
         means that this agents is deterministic.
         :return: Best moveset based on current situation
         :rtype: tuple[str]
         """
+        moves = {move: self.evaluate_move(move) for move in self.generate_legal_moves(self.current.copy())}
 
-        # if c is None:
-        #     c = copy(self)
-        if c is None:
-            legal = self.generate_legal_moves(self.current.copy())
-        else:
-            legal = self.generate_legal_moves(c.current.copy())
-        tree = {
-            move: [self.evaluate_move(move, c), 0]
-            for move in legal
-        }
+        return max(moves.items(), key=lambda x: x[1])[0]
 
-        if d <= 0:
-            return tree
-        # print(tree)
-        for k, v in tree.items():
-            v[1] = self.tree(d - 1, v[0][1])
-
-        return tree
-
-    def evaluate_move(self, move, c=None):
+    def evaluate_move(self, move):
         """
         Calculates the reward difference of the provided moveset.
         :param move: Set of moves
         :type move: tuple[str]
-        :param c: Game state, will use current if None
         :return: Reward difference
         :rtype: float
         """
-        if c is None:
-            c = deepcopy(self)
-            c.gameover = True
-
+        copy = deepcopy(self)
+        copy.gameover = True
         for _ in move:
-            c.game_step(_)
-        return c.tree_fitness() - self.tree_fitness(), c
-
-    def search_tree(self, tree, p=((), 0.0), fits=None):
-        if fits is None:
-            fits = set()
-
-        for move, fc_t in tree.items():
-            fits.add(
-                (move + p[0], fc_t[0][0] + p[1])
-            )
-            if fc_t[1]:
-                fits.update(self.search_tree(fc_t[1], (move, fc_t[0][0] + p[1]), fits))
-
-        return fits
+            copy.game_step(_)
+        return copy.tree_fitness() - self.tree_fitness()
 
     def tree_play(self, tickdelay=0.01, timeout=6, movedelay=0.5, depth=0):
         """
@@ -147,17 +115,9 @@ class GameTree(Game):
             if not b:
                 d = time.time()
 
-            tree = self.tree(0)
-
-            fits = self.search_tree(tree)
-
-            best = max(fits, key=lambda _: _[1])[0]
-
-            # print(best)
-
-            # for move in best:
-            #     self.game_step(move)
-            #     time.sleep(movedelay)
+            for move in self.pick_safest_move():
+                self.game_step(move)
+                time.sleep(movedelay)
 
             if not b:
                 d = time.time() - d

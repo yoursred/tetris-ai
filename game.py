@@ -179,8 +179,6 @@ class Game(object):
 
         self.possible_actions = ['left:  ', 'right: ', 'rotate:', 'drop:  ', 'nop:   ', 'hold:  ']
 
-        self.extra_data = {}
-
     @staticmethod
     def generate_minos():
         """
@@ -321,7 +319,6 @@ class Game(object):
             self.timer = threading.Timer(self.tickdelay, self.timetick)
             self.timer.start()
             self.game_step('gravity')
-            print('G')
 
     def display_tick(self):
         """
@@ -456,10 +453,6 @@ class Game(object):
         :rtype: float
         """
         return float(self.score)
-
-    @property
-    def data(self):
-        return self.extra_data
 
     # noinspection PyArgumentList
     def __deepcopy__(self, memodict=None):
